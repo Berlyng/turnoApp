@@ -34,6 +34,38 @@ class AuthService {
     }
   }
 
+  // -------------------------
+  // 2. INICIO DE SESIÓN
+  // -------------------------
+  Future<User?> signIn(String email, String password) async {
+    try {
+      UserCredential credential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      return credential.user;
+    } catch (e) {
+      print("Error en login: $e");
+      return null;
+    }
+  }
+
+  // -------------------------
+  // 3. OBTENER ROL DEL USUARIO
+  // -------------------------
+  Future<String> getUserRole(String uid) async {
+    try {
+      DocumentSnapshot doc = await _firestore.collection('usuarios').doc(uid).get();
+      if (doc.exists) {
+        return doc.get('role') ?? 'cliente';
+      }
+      return 'cliente';
+    } catch (e) {
+      print("Error al obtener rol: $e");
+      return 'cliente';
+    }
+  }
+
 
 
 }

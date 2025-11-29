@@ -79,24 +79,33 @@ class DatabaseService {
     return snapshot.docs.map((doc) => doc.get('time') as String).toList();
   }
 
-  // -------------------------
-  // BARBERO: GESTIÓN DE CITAS
+ // -------------------------
+  // BARBERO: GESTIÓN DE CITAS CON FILTRO
   // -------------------------
 
-  // 1. Obtiene las citas para el Barbero actualmente logeado
-  Stream<List<AppointmentModel>> getBarberAppointments(String barberId) {
-    // Escuchamos los cambios en tiempo real (Stream)
-    return _firestore
+  // Obtiene las citas para el Barbero actualmente logeado, con un filtro de estado opcional.
+    Stream<List<AppointmentModel>> getBarberAppointments(
+    String barberId, {
+    AppointmentStatus? filterStatus, // Nuevo parámetro opcional
+  }) {
+    Query query = _firestore
         .collection('citas')
-        .where('barberId', isEqualTo: barberId)
-        // Ordenamos por fecha y luego por hora para ver la agenda
+        .where('barberId', isEqualTo: barberId);
+
+    // Si se proporciona un filtro de estado, se añade la cláusula where
+    if (filterStatus != null) {
+      final statusString = filterStatus.toString().split('.').last;
+      query = query.where('status', isEqualTo: statusString);
+    }
+    
+    query = query
         .orderBy('date', descending: false)
-        .orderBy('time', descending: false) 
-        .snapshots()
-        .map((snapshot) {
+        .orderBy('time', descending: false);
+
+    return query.snapshots().map((snapshot) {
       return snapshot.docs.map((doc) {
-        // Mapeamos el documento a nuestro AppointmentModel
-        return AppointmentModel.fromFirestore(doc.data(), doc.id);
+        // CORRECCIÓN CLAVE: Casting explícito
+        return AppointmentModel.fromFirestore(doc.data() as Map<String, dynamic>, doc.id);
       }).toList();
     });
   }
@@ -181,4 +190,6 @@ class DatabaseService {
       });
     });
   }
+
+  
 }

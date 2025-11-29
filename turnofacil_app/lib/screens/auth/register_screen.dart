@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
-// Importa la pantalla a la que navegarás después del registro (ej. Login)
-import 'login_screen.dart'; 
+import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -12,42 +11,78 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final AuthService _authService = AuthService();
+
+  // Controladores de los campos
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final _formKey = GlobalKey<FormState>(); 
-  bool _isLoading = false;
 
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  
+  // 🆕 ESTADO PARA LA SELECCIÓN DE ROL
+  final List<String> _roles = ['cliente', 'barbero'];
+  String _selectedRole = 'cliente'; // Valor por defecto
+
+  /// FUNCIÓN DE REGISTRO
   void _register() async {
+    // Validamos formulario antes de todo
     if (_formKey.currentState!.validate()) {
-      setState(() { _isLoading = true; });
-      
+      setState(() => _isLoading = true);
+
+      // 🆕 LLAMADA AL SERVICIO CON EL ROL SELECCIONADO
       final user = await _authService.signUp(
-        _nameController.text,
-        _emailController.text,
-        _passwordController.text,
+        _nameController.text.trim(),
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+        _selectedRole, // <-- Se pasa el rol aquí
       );
 
+      // ⚠️ IMPORTANTE: verificar que el widget sigue montado
+      if (!mounted) return;
+
       if (user != null) {
-        // Registro exitoso: Navegar al Login o Home
+        // ✔ Registro exitoso
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Registro exitoso. ¡Inicia sesión!')),
+          const SnackBar(
+            content: Text('Usuario registrado con éxito 🎉'),
+            backgroundColor: Colors.green,
+          ),
         );
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
+
+        // 🔁 Navega al Login después de un pequeño delay
+        Future.delayed(const Duration(milliseconds: 800), () {
+          if (!mounted) return; // por seguridad
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+        });
+
       } else {
-        // Manejar error (ej. email ya en uso)
+        // ❌ Error de registro
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al registrar. Intenta de nuevo.')),
+          const SnackBar(
+            content: Text('Error al registrar. Intenta nuevamente 😕'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
-      
-      setState(() { _isLoading = false; });
+
+      // Siempre apagar loading
+      setState(() => _isLoading = false);
     }
   }
-  
-  // ... (El resto del build/UI es similar al LoginScreen, solo cambia el controlador de nombre y el onPressed del botón)
+
+  @override
+  void dispose() {
+    // 🔹 Liberar memoria (BUENA PRÁCTICA)
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  /// INTERFAZ
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -63,7 +98,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                // Campo de Nombre
+                // NOMBRE
                 TextFormField(
                   controller: _nameController,
                   decoration: const InputDecoration(
@@ -71,15 +106,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.person),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor, ingrese su nombre.';
-                    }
-                    return null;
-                  },
+                  validator: (value) =>
+                      value == null || value.isEmpty ? 'Ingrese su nombre.' : null,
                 ),
+
                 const SizedBox(height: 20),
-                // Campo de Correo Electrónico
+
+                // EMAIL
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -88,15 +121,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.email),
                   ),
-                  validator: (value) {
-                    if (value == null || !value.contains('@')) {
-                      return 'Correo no válido.';
-                    }
-                    return null;
-                  },
+                  validator: (value) =>
+                      value != null && value.contains('@')
+                          ? null
+                          : 'Correo no válido.',
                 ),
+
                 const SizedBox(height: 20),
-                // Campo de Contraseña
+
+                // CONTRASEÑA
                 TextFormField(
                   controller: _passwordController,
                   obscureText: true,
@@ -105,15 +138,50 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.lock),
                   ),
-                  validator: (value) {
-                    if (value == null || value.length < 6) {
-                      return 'La contraseña debe tener al menos 6 caracteres.';
-                    }
-                    return null;
-                  },
+                  validator: (value) =>
+                      value != null && value.length >= 6
+                          ? null
+                          : 'Debe tener al menos 6 caracteres.',
                 ),
+
                 const SizedBox(height: 30),
-                // Botón de Registro
+                
+                // 🆕 SELECTOR DE ROL
+                InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Selecciona tu Rol',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.group_add),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedRole,
+                      isExpanded: true,
+                      onChanged: (String? newValue) {
+                        if (newValue != null) {
+                          setState(() {
+                            _selectedRole = newValue;
+                          });
+                        }
+                      },
+                      items: _roles.map<DropdownMenuItem<String>>((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(
+                            value == 'cliente' 
+                              ? 'Cliente (Reservar turnos)' 
+                              : 'Barbero (Gestionar mi negocio)',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+
+                // BOTÓN REGISTRAR
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -122,19 +190,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       backgroundColor: Colors.indigo,
                       padding: const EdgeInsets.symmetric(vertical: 15),
                     ),
-                    child: _isLoading 
-                        ? const CircularProgressIndicator(color: Colors.white)
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
                         : const Text(
                             'Registrarse',
                             style: TextStyle(fontSize: 18, color: Colors.white),
                           ),
                   ),
                 ),
+
                 const SizedBox(height: 20),
+
+                // TEXTO: YA TIENES CUENTA?
                 TextButton(
                   onPressed: () {
                     Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (context) => const LoginScreen()),
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
                     );
                   },
                   child: const Text('¿Ya tienes cuenta? Inicia sesión'),

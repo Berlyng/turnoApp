@@ -15,6 +15,24 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
   final DatabaseService _dbService = DatabaseService();
   final String? _currentBarberId = FirebaseAuth.instance.currentUser?.uid;
 
+  // Estado para el filtro: null significa "Todas"
+  AppointmentStatus? _selectedFilterStatus = AppointmentStatus.pending; 
+
+  // Lista de opciones de filtro para el Dropdown
+  final List<Map<String, dynamic>> _filterOptions = [
+    {'status': null, 'label': 'Todas las Citas'},
+    {'status': AppointmentStatus.pending, 'label': 'Pendientes'},
+    {'status': AppointmentStatus.confirmed, 'label': 'Confirmadas'},
+    {'status': AppointmentStatus.rejected, 'label': 'Rechazadas'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Podemos iniciar con las citas pendientes si es el flujo más común
+    _selectedFilterStatus = AppointmentStatus.pending; 
+  }
+
   void _logout() async {
     await FirebaseAuth.instance.signOut();
     if (mounted) {
@@ -46,14 +64,14 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     if (_currentBarberId == null) {
-      // Si por alguna razón el UID es nulo, forzamos el logout.
-      return const Center(child: Text('Error de usuario.'));
+      return const Center(child: Text('Error de usuario. Vuelve a iniciar sesión.'));
     }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Dashboard de Barbero'),
         backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -62,31 +80,73 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
           ),
         ],
       ),
-      body: _buildAppointmentList(),
+      body: Column(
+        children: [
+          // ---------------------------------
+          // Nuevo: Selector de Filtro de Estado
+          // ---------------------------------
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 10.0),
+            child: DropdownButtonFormField<AppointmentStatus?>(
+              value: _selectedFilterStatus,
+              decoration: InputDecoration(
+                labelText: 'Filtrar por Estado',
+                prefixIcon: const Icon(Icons.filter_list),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              items: _filterOptions.map((option) {
+                return DropdownMenuItem<AppointmentStatus?>(
+                  value: option['status'] as AppointmentStatus?,
+                  child: Text(option['label'] as String),
+                );
+              }).toList(),
+              onChanged: (AppointmentStatus? newValue) {
+                setState(() {
+                  _selectedFilterStatus = newValue;
+                });
+              },
+            ),
+          ),
+          // ---------------------------------
+          
+          Expanded(
+            child: _buildAppointmentList(),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildAppointmentList() {
     return StreamBuilder<List<AppointmentModel>>(
-      // Usamos el Stream para obtener las citas en tiempo real
-      stream: _dbService.getBarberAppointments(_currentBarberId!),
+      // CAMBIO CLAVE: Pasamos el filtro al método de servicio
+      stream: _dbService.getBarberAppointments(
+        _currentBarberId!, 
+        filterStatus: _selectedFilterStatus
+      ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
+          print("Dashboard Error: ${snapshot.error}");
           return Center(child: Text('Error al cargar las citas: ${snapshot.error}'));
         }
 
         final appointments = snapshot.data ?? [];
+        final filterLabel = _filterOptions.firstWhere(
+            (opt) => opt['status'] == _selectedFilterStatus)['label'] as String;
 
         if (appointments.isEmpty) {
-          return const Center(
-            child: Text(
-              '🎉 ¡No tienes citas pendientes ni confirmadas hoy!',
-              style: TextStyle(fontSize: 18, color: Colors.grey),
-              textAlign: TextAlign.center,
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Text(
+                '🎉 No hay citas en estado "$filterLabel".',
+                style: const TextStyle(fontSize: 18, color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
             ),
           );
         }
@@ -106,7 +166,6 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
 
   // Widget para mostrar una cita individual
   Widget _buildAppointmentCard(AppointmentModel appointment) {
-    // Formatear la fecha para una mejor visualización
     final dateString = MaterialLocalizations.of(context).formatShortDate(appointment.date);
     final isPending = appointment.status == AppointmentStatus.pending;
 
@@ -131,18 +190,23 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 5),
-      elevation: 3,
+      elevation: 4,
       color: statusColor,
       child: ListTile(
+        contentPadding: const EdgeInsets.all(10),
         leading: CircleAvatar(
-          backgroundColor: isPending ? Colors.yellow.shade800 : Colors.teal,
-          child: Text(appointment.time.substring(0, 2), style: const TextStyle(color: Colors.white)),
+          backgroundColor: isPending ? Colors.yellow.shade800 : Colors.teal.shade700,
+          radius: 25,
+          child: Text(appointment.time, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
         ),
         title: Text(
-          '${appointment.clientName} - ${appointment.service}',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          'Cliente: ${appointment.clientName}',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
-        subtitle: Text('Día: $dateString, Hora: ${appointment.time}\nEstado: $statusText'),
+        subtitle: Text(
+          'Servicio: ${appointment.service}\n'
+          'Día: $dateString | Estado: $statusText',
+        ),
         isThreeLine: true,
         trailing: isPending
             ? Row(
@@ -150,13 +214,13 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
                 children: [
                   // Botón Confirmar
                   IconButton(
-                    icon: const Icon(Icons.check_circle, color: Colors.green),
+                    icon: const Icon(Icons.check_circle, color: Colors.green, size: 30),
                     onPressed: () => _handleStatusUpdate(appointment, AppointmentStatus.confirmed),
                     tooltip: 'Confirmar',
                   ),
                   // Botón Rechazar
                   IconButton(
-                    icon: const Icon(Icons.cancel, color: Colors.red),
+                    icon: const Icon(Icons.cancel, color: Colors.red, size: 30),
                     onPressed: () => _handleStatusUpdate(appointment, AppointmentStatus.rejected),
                     tooltip: 'Rechazar',
                   ),

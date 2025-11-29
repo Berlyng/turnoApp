@@ -20,4 +20,14 @@ class BarberModel {
       photoUrl: data['photoUrl'],
     );
   }
+
+  // Método para convertir el modelo a un mapa para guardar en Firestore
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'specialty': specialty,
+      'photoUrl': photoUrl,
+      // Nota: 'id' no se incluye aquí, ya que se usa como ID del documento en Firestore.
+    };
+  }
 }

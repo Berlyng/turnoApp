@@ -75,8 +75,14 @@ class DatabaseService {
         .where('status', whereIn: ['pending', 'confirmed'])
         .get();
 
-    // Devolvemos solo la lista de horas ocupadas (ej. ["10:00", "11:30"])
-    return snapshot.docs.map((doc) => doc.get('time') as String).toList();
+    // Devolvemos solo la lista de horas ocupadas (ej. ["10:00", "11:30"]).
+    // 💡 MEJORA DE ROBUSTEZ: Se utiliza 'doc.data()?['time'] as String?' para manejar nulos
+    // y se usa whereType<String>() para filtrar cualquier valor que no sea String,
+    // garantizando que la lista final sea de tipo List<String>.
+    return snapshot.docs
+        .map((doc) => doc.data().containsKey('time') ? doc.get('time') as String? : null)
+        .whereType<String>() 
+        .toList();
   }
 
  // -------------------------
